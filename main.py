@@ -12,6 +12,9 @@ TILE_SIZE = 100
 GRID_COLS = WIDTH // TILE_SIZE
 GRID_ROWS = HEIGHT // TILE_SIZE
 GRAVITY = 0.75 
+MAX_FALL_SPEED = 20
+
+player_hitbox = (50, 100) 
 
 clock = pygame.time.Clock() 
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) 
@@ -92,12 +95,17 @@ class Player(pygame.sprite.Sprite):
     self.animation_speed = 0.15 
     self.image = self.frames[self.state][self.frame_index] 
     
-    self.rect = self.rect = self.image.get_rect()  
-    self.rect.topleft = (self.x,self.y) 
+    scaled_init = pygame.transform.scale(self.image, (150, 150))
+    self.rect = scaled_init.get_rect()  
+    self.rect.topleft = (self.x, self.y) 
+    
+    self.hitbox = pygame.Rect(0, 0, 60, 90)
+    self.hitbox.midbottom = self.rect.midbottom
     
     self.is_attacking = False 
     self.y_vel = 0
-    self.jump_power = 16 
+    self.x_vel = 0
+    self.jump_power = -13 
     
     self.on_ground = True 
     
@@ -123,25 +131,22 @@ class Player(pygame.sprite.Sprite):
     keys = pygame.key.get_pressed()
     
     current_action = 'idle'
+    self.x_vel = 0 
+    
     if not self.is_attacking:
       if keys[pygame.K_LEFT] or keys[pygame.K_a]:
         self.direction = -1
         current_action = 'run'
-        self.rect[0] -= self.speed
+        self.x_vel = -self.speed
         
       if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
         self.direction = 1
         current_action = 'run'
-        self.rect[0] += self.speed  
+        self.x_vel = self.speed  
     
     if keys[pygame.K_x]:
       self.is_attacking = True 
-      self.attack = True
       current_action = 'attack'  
-    
-    if keys[pygame.K_SPACE]:
-      self.on_ground = False 
-      self.rect[1] -= self.jump_power
       
     if current_action != self.state:
       self.state = current_action
@@ -152,28 +157,77 @@ class Player(pygame.sprite.Sprite):
       self.y_vel = self.jump_power
       self.on_ground = False 
       
-  
+  def check_collision(self, grid_data):
+    self.hitbox.centerx = self.rect.centerx 
+    
+    self.rect.x += self.x_vel
+    self.hitbox.x += self.x_vel   
+    self.check_boundries()
+    
+    player_col = int(self.hitbox.centerx // TILE_SIZE)
+    player_row = int(self.hitbox.centery // TILE_SIZE) 
+    
+    for r in range(max(0, player_row - 2), min(GRID_ROWS, player_row + 3)):
+      for c in range(max(0, player_col - 2), min(len(grid_data), player_col + 3)):
+        tile_name = grid_data[r][c] 
+        if tile_name in ['tile_0_0', 'tile_0_1']:
+          tile_rect = pygame.Rect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE) 
+          if self.hitbox.colliderect(tile_rect):
+            if self.x_vel > 0:
+              self.hitbox.right = tile_rect.left 
+              self.rect.x = self.hitbox.x - 45 
+            if self.x_vel < 0:
+              self.hitbox.left = tile_rect.right 
+              self.rect.x = self.hitbox.x - 45 
+    
+    self.y_vel += GRAVITY
+    if self.y_vel > MAX_FALL_SPEED:
+      self.y_vel = MAX_FALL_SPEED
+      
+    
+    self.rect.y += self.y_vel 
+    self.hitbox.y += self.y_vel 
+    self.on_ground = False 
+    
+    
+    player_col = int(self.hitbox.centerx // TILE_SIZE)
+    player_row = int(self.hitbox.centery // TILE_SIZE)
+    
+    
+    for r in range(max(0, player_row - 2), min(GRID_ROWS, player_row + 3)):
+      for c in range(max(0, player_col - 2), min(len(grid_data), player_col + 3)):
+        tile_name = grid_data[r][c] 
+        if tile_name in ['tile_0_0', 'tile_0_1']:
+          tile_rect = pygame.Rect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE) 
+          if self.hitbox.colliderect(tile_rect): 
+            if self.y_vel > 0:
+              self.hitbox.bottom = tile_rect.top
+              self.rect.bottom = self.hitbox.bottom + 25
+              self.y_vel = 0
+              self.on_ground = True
+            elif self.y_vel < 0:
+              self.hitbox.top = tile_rect.bottom
+              self.rect.top = self.hitbox.top - 30 
+              self.y_vel = 0 
   
   def check_boundries(self):
     map_width = max((len(row) for row in map_data), default=GRID_COLS) * TILE_SIZE
     max_x = max(0, map_width - self.rect.width)
-    if self.rect[0] <= 0: 
-      self.rect[0] = 0
-    elif self.rect[0] >= max_x:
-      self.rect[0] = max_x 
+    if self.rect.x <= 0: 
+      self.rect.x = 0 
+    elif self.rect.x >= max_x:
+      self.rect.x = max_x 
       
   
   def draw(self):
     screen.blit(self.image, (self.rect.x - camera_x, self.rect.y))
   
-  def update(self):
+  def update(self, grid_data):
     global camera_x
     
-    # self.y_vel -= GRAVITY 
-    # self.rect[1] -= self.y_vel 
-    
     self.input()
-    self.check_boundries() 
+    self.check_collision(grid_data)
+    
     map_width = max((len(row) for row in map_data), default=GRID_COLS) * TILE_SIZE
     camera_x = max(0, min(self.rect.x - WIDTH // 2, map_width - WIDTH))
     self.animate()
@@ -195,15 +249,15 @@ while True:
   for event in pygame.event.get():
     if event.type == pygame.QUIT:
       sys.exit() 
-      break
     if event.type == pygame.KEYDOWN:
       if event.key == pygame.K_ESCAPE:
         sys.exit()
+      if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
+        player.jump()
       if event.key == pygame.K_r:
         map_data = load_map() 
-        break 
   
-  player.update()
+  player.update(map_data)
   pygame.display.update()
 
 pygame.quit() 
