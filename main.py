@@ -10,16 +10,13 @@ HEIGHT = 600
 FPS = 60
 TILE_SIZE = 100 
 GRID_COLS = WIDTH // TILE_SIZE
-GRID_ROWS = HEIGHT // TILE_SIZE
+GRID_ROWS = HEIGHT // TILE_SIZE 
 GRAVITY = 0.75 
 MAX_FALL_SPEED = 20
-
-player_hitbox = (50, 100) 
 
 clock = pygame.time.Clock() 
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) 
 pygame.display.set_caption("Dark night") 
-
 
 background = pygame.image.load('assets/background_night .png').convert_alpha() 
 background = pygame.transform.scale(background, (WIDTH, HEIGHT)) 
@@ -55,8 +52,6 @@ def load_map(filename='map_data.json'):
   return [[None for _ in range(GRID_COLS)] for _ in range(GRID_ROWS)] 
 
 
-
-
 class Player(pygame.sprite.Sprite):
   def __init__(self, pos_x, pos_y): 
     super().__init__()
@@ -66,9 +61,7 @@ class Player(pygame.sprite.Sprite):
     self.speed = 5 
     
     self.frames = {
-      'idle' : [
-        pygame.image.load('assets/hero/frame_0.png').convert_alpha(),
-      ],
+      'idle' : [pygame.image.load('assets/hero/frame_0.png').convert_alpha()],
       'run': [
         pygame.image.load('assets/hero/frame_1.png').convert_alpha(),
         pygame.image.load('assets/hero/frame_2.png').convert_alpha(),
@@ -87,7 +80,6 @@ class Player(pygame.sprite.Sprite):
         pygame.image.load('assets/hero/frame_9.png').convert_alpha(),
         pygame.image.load('assets/hero/frame_10.png').convert_alpha(),
       ]
-      
     }
     
     self.state = 'idle' 
@@ -99,26 +91,23 @@ class Player(pygame.sprite.Sprite):
     self.rect = scaled_init.get_rect()  
     self.rect.topleft = (self.x, self.y) 
     
-    self.hitbox = pygame.Rect(0, 0, 60, 90)
+    self.hitbox = pygame.Rect(0, 0, 50, 90)
     self.hitbox.midbottom = self.rect.midbottom
     
     self.is_attacking = False 
     self.y_vel = 0
     self.x_vel = 0
-    self.jump_power = -13 
-    
-    self.on_ground = True 
-    
+    self.jump_power = -15 
+    self.on_ground = False 
+    self.character = 'player'
   
   def animate(self):
     current_state_frames = self.frames[self.state]
     self.frame_index += self.animation_speed 
-    
     if self.frame_index >= len(current_state_frames):
       self.is_attacking = False 
       self.frame_index = 0 
       
-    
     active_surface = current_state_frames[int(self.frame_index)] 
     active_surface = pygame.transform.scale(active_surface, (150, 150))
     if self.direction == 1:
@@ -126,31 +115,33 @@ class Player(pygame.sprite.Sprite):
     elif self.direction == -1:
       self.image = pygame.transform.flip(active_surface, True, False) 
      
-  
   def input(self):
-    keys = pygame.key.get_pressed()
-    
-    current_action = 'idle'
-    self.x_vel = 0 
-    
-    if not self.is_attacking:
-      if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        self.direction = -1
-        current_action = 'run'
-        self.x_vel = -self.speed
-        
-      if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-        self.direction = 1
-        current_action = 'run'
-        self.x_vel = self.speed  
-    
-    if keys[pygame.K_x]:
-      self.is_attacking = True 
-      current_action = 'attack'  
+    if self.character == 'player':
+      keys = pygame.key.get_pressed()
+      current_action = 'idle'
+      self.x_vel = 0 
       
-    if current_action != self.state:
-      self.state = current_action
-      self.frame_index = 0 
+      if not self.is_attacking:
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+          self.direction = -1
+          current_action = 'run'
+          self.x_vel = -self.speed
+          
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+          self.direction = 1
+          current_action = 'run'
+          self.x_vel = self.speed  
+      
+      if keys[pygame.K_x]:
+        self.is_attacking = True 
+        current_action = 'attack'  
+      
+      if keys[pygame.K_SPACE]:
+        self.jump() 
+      
+      if current_action != self.state:
+        self.state = current_action
+        self.frame_index = 0 
   
   def jump(self):
     if self.on_ground:
@@ -158,67 +149,64 @@ class Player(pygame.sprite.Sprite):
       self.on_ground = False 
       
   def check_collision(self, grid_data):
-    self.hitbox.centerx = self.rect.centerx 
     
     self.rect.x += self.x_vel
-    self.hitbox.x += self.x_vel   
+    self.hitbox.centerx = self.rect.centerx
+    self.hitbox.x += self.x_vel 
     self.check_boundries()
     
     player_col = int(self.hitbox.centerx // TILE_SIZE)
     player_row = int(self.hitbox.centery // TILE_SIZE) 
+    max_cols = len(grid_data[0]) if grid_data else GRID_COLS
     
     for r in range(max(0, player_row - 2), min(GRID_ROWS, player_row + 3)):
-      for c in range(max(0, player_col - 2), min(len(grid_data), player_col + 3)):
-        tile_name = grid_data[r][c] 
-        if tile_name in ['tile_0_0', 'tile_0_1']:
+      for c in range(max(0, player_col - 2), min(max_cols, player_col + 3)):
+
+        if grid_data[r][c] in ['tile_0_0', 'tile_0_1', 'tile_0_2']:
           tile_rect = pygame.Rect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE) 
           if self.hitbox.colliderect(tile_rect):
             if self.x_vel > 0:
-              self.hitbox.right = tile_rect.left 
-              self.rect.x = self.hitbox.x - 45 
-            if self.x_vel < 0:
+              self.hitbox.right = tile_rect.left
+            elif self.x_vel < 0:
               self.hitbox.left = tile_rect.right 
-              self.rect.x = self.hitbox.x - 45 
-    
+            self.rect.centerx = self.hitbox.centerx
+
     self.y_vel += GRAVITY
     if self.y_vel > MAX_FALL_SPEED:
       self.y_vel = MAX_FALL_SPEED
       
-    
     self.rect.y += self.y_vel 
     self.hitbox.y += self.y_vel 
     self.on_ground = False 
     
-    
     player_col = int(self.hitbox.centerx // TILE_SIZE)
     player_row = int(self.hitbox.centery // TILE_SIZE)
     
-    
     for r in range(max(0, player_row - 2), min(GRID_ROWS, player_row + 3)):
-      for c in range(max(0, player_col - 2), min(len(grid_data), player_col + 3)):
-        tile_name = grid_data[r][c] 
-        if tile_name in ['tile_0_0', 'tile_0_1']:
+      for c in range(max(0, player_col - 2), min(max_cols, player_col + 3)):
+
+        if grid_data[r][c] in ['tile_0_0', 'tile_0_1', 'tile_0_2']:
           tile_rect = pygame.Rect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE) 
           if self.hitbox.colliderect(tile_rect): 
             if self.y_vel > 0:
               self.hitbox.bottom = tile_rect.top
-              self.rect.bottom = self.hitbox.bottom + 25
               self.y_vel = 0
               self.on_ground = True
             elif self.y_vel < 0:
               self.hitbox.top = tile_rect.bottom
-              self.rect.top = self.hitbox.top - 30 
               self.y_vel = 0 
+            self.rect.bottom = self.hitbox.bottom + 45 
   
   def check_boundries(self):
     map_width = max((len(row) for row in map_data), default=GRID_COLS) * TILE_SIZE
     max_x = max(0, map_width - self.rect.width)
     if self.rect.x <= 0: 
       self.rect.x = 0 
+      self.hitbox.centerx = self.rect.centerx
     elif self.rect.x >= max_x:
       self.rect.x = max_x 
+      self.hitbox.centerx = self.rect.centerx
       
-  
   def draw(self):
     screen.blit(self.image, (self.rect.x - camera_x, self.rect.y))
   
@@ -234,9 +222,44 @@ class Player(pygame.sprite.Sprite):
     self.draw()
 
 
+class Enemy(Player):
+  def __init__(self, pos_x, pos_y):
+    super().__init__(pos_x, pos_y)
+    
+    self.frames = {
+          'idle' : [pygame.image.load('assets/enemy/frame_0.png').convert_alpha()],
+          'run': [
+            pygame.image.load('assets/enemy/frame_1.png').convert_alpha(),
+            pygame.image.load('assets/enemy/frame_2.png').convert_alpha(),
+          ],
+          'attack' : [
+            pygame.image.load('assets/enemy/frame_3.png').convert_alpha(),
+            pygame.image.load('assets/enemy/frame_4.png').convert_alpha(),
+            pygame.image.load('assets/enemy/frame_5.png').convert_alpha(),
+            pygame.image.load('assets/enemy/frame_6.png').convert_alpha(), 
+          ],
+          'hurt' : [
+            pygame.image.load("assets/enemy/frame_7.png").convert_alpha(),
+          ],
+          'death' : [
+            pygame.image.load('assets/enemy/frame_7.png').convert_alpha(),
+            pygame.image.load('assets/enemy/frame_8.png').convert_alpha(),
+            pygame.image.load('assets/enemy/frame_9.png').convert_alpha(),
+          ]
+        }
+    
+    self.direction = 1 
+    self.character = 'enemy' 
+  
+  def check_boundries(self):
+    pass 
+  
+  
+
 player = Player(50, 50)
+enemy = Enemy(100, 50) 
 map_data = load_map()
-tile_images = load_tile_images()
+tile_images = load_tile_images() 
 camera_x = 0
 
 while True:
@@ -258,7 +281,7 @@ while True:
         map_data = load_map() 
   
   player.update(map_data)
-  pygame.display.update()
+  enemy.update(map_data) 
+  pygame.display.update() 
 
-pygame.quit() 
-      
+pygame.quit()
