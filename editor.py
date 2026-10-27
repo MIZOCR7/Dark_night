@@ -6,7 +6,7 @@ import json
 pygame.init()
 
 WIDTH = 1000
-HEIGHT = 900 
+HEIGHT = 600
 TILE_SIZE = 100
 side_margin = 300
 
@@ -19,7 +19,7 @@ FPS = 60
 timer = pygame.time.Clock()
 
 background = pygame.image.load('assets/background_night .png')
-background = pygame.transform.scale(background, (WIDTH, HEIGHT))
+background = pygame.transform.scale(background, (WIDTH, HEIGHT-100))
 # hero = {
 #   'idle' : 'assets/hero/frame_0.png',
 #   'run' : [f'assets/hero/frame_{frame}.png' for frame in range(1,4)],  I am an idiot I do not need those now, I need those in the main file of the game.
@@ -41,7 +41,10 @@ def save_map(grid_data, filename='map_data.json'):
 def load_map(filename='map_data.json'):
   if os.path.exists(filename):
     with open(filename, 'r') as f:
-      return json.load(f)
+      data = json.load(f)
+    while len(data) < GRID_ROWS:
+      data.append([None] * (len(data[0]) if data else GRID_COLS))
+    return data[:GRID_ROWS]
   return [[None for _ in range(GRID_COLS)] for _ in range(GRID_ROWS)]
 
 
@@ -138,16 +141,16 @@ def main():
             if rect.collidepoint(event.pos):
               selected_tile = tile_name
               break
-          else:
-            x, y = event.pos
-            col, row = (x + camera_x) // TILE_SIZE, y // TILE_SIZE
-            if 0 <= x < WIDTH and 0 <= col < len(grid_data[0]) and 0 <= row < GRID_ROWS and selected_tile:
-              grid_data[row][col] = selected_tile
-        elif event.button == 3:
-          x, y = event.pos
-          col, row = (x + camera_x) // TILE_SIZE, y // TILE_SIZE
-          if 0 <= x < WIDTH and 0 <= col < len(grid_data[0]) and 0 <= row < GRID_ROWS:
-            grid_data[row][col] = None
+
+    mx, my = pygame.mouse.get_pos()
+    pressed = pygame.mouse.get_pressed()
+    if mx < WIDTH and (pressed[0] or pressed[2]):
+      col, row = (mx + camera_x) // TILE_SIZE, my // TILE_SIZE
+      if 0 <= row < GRID_ROWS and 0 <= col < len(grid_data[0]):
+        if pressed[0] and selected_tile:
+          grid_data[row][col] = selected_tile
+        elif pressed[2]:
+          grid_data[row][col] = None
 
     paint_tiles(tile_images, tile_previews, grid_data, sidebar_buttons, selected_tile, font, camera_x)
     pygame.display.update()
