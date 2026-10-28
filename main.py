@@ -21,7 +21,15 @@ clock = pygame.time.Clock()
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) 
 pygame.display.set_caption("Dark night") 
 
-background = pygame.image.load('assets/background_night .png').convert_alpha() 
+background_path = os.path.join("assets", "background_night.png")
+
+if not os.path.exists(background_path):
+    raise FileNotFoundError(
+        f"Background image not found: {background_path}"
+    )
+
+background = pygame.image.load(background_path).convert_alpha()
+background = pygame.transform.scale(background, (WIDTH, HEIGHT)) 
 background = pygame.transform.scale(background, (WIDTH, HEIGHT)) 
 
 
@@ -45,14 +53,41 @@ def draw_map(screen, grid_data, tile_images, camera_x=0):
       if tile_name in tile_images:
         screen.blit(tile_images[tile_name], (col_idx * TILE_SIZE - camera_x, row_idx * TILE_SIZE))
 
-def load_map(filename='map_data.json'):
-  if os.path.exists(filename):
-    with open(filename, 'r') as f:
-      data = json.load(f) 
-    while len(data) < GRID_ROWS:
-      data.append([None] * (len(data[0]) if data else GRID_COLS))
-    return data[:GRID_ROWS]
-  return [[None for _ in range(GRID_COLS)] for _ in range(GRID_ROWS)] 
+def load_map(filename="map_data.json"):
+    if not os.path.exists(filename):
+        return [
+            [None for _ in range(GRID_COLS)]
+            for _ in range(GRID_ROWS)
+        ]
+
+    with open(filename, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError("Map data must be a list of rows.")
+
+    if not data:
+        data = []
+
+    # Ensure every row is a list and has enough columns.
+    normalized_data = []
+
+    for row in data:
+        if not isinstance(row, list):
+            raise ValueError("Each map row must be a list.")
+
+        normalized_row = list(row[:GRID_COLS])
+
+        while len(normalized_row) < GRID_COLS:
+            normalized_row.append(None)
+
+        normalized_data.append(normalized_row)
+
+    # Ensure the map has enough rows.
+    while len(normalized_data) < GRID_ROWS:
+        normalized_data.append([None] * GRID_COLS)
+
+    return normalized_data
 
 def frame_number(filename):
   digits = ''.join(ch for ch in filename if ch.isdigit()) 
@@ -66,7 +101,7 @@ class Character(pygame.sprite.Sprite):
     self.direction = 1 
     self.speed = 5 
     self.state = 'idle' 
-    self.character_path = 'hero' 
+    self.character_path = character_path 
     self.frames = self.load_frames()  
     self.frame_index = 0 
     self.animation_speed = 0.15 
@@ -120,129 +155,170 @@ class Character(pygame.sprite.Sprite):
       return 'run'
     return 'idle' 
   
+  def take_hit(self):
+    if self.is_dead or self.is_hurt:
+      return
+    self.hp -= 1
+    self.is_attacking = False
+    if self.hp <= 0:
+      self.is_dead = True
+      self.set_state('death')
+    elif len(self.frames['hurt']) > 0:
+      self.is_hurt = True
+      self.set_state('hurt') 
   
-  
-  def animate(self): 
-    current_state_frames = self.image 
-    self.frame_index += self.animation_speed 
-    if self.frame_index >= len(current_state_frames):
-      self.is_attacking = False 
-      self.frame_index = 0 
-      
-    active_surface = current_state_frames[int(self.frame_index)] 
-    active_surface = pygame.transform.scale(active_surface, (150, 150))
-    if self.direction == 1:
-      self.image = pygame.transform.flip(active_surface, False, False) 
-    elif self.direction == -1:
-      self.image = pygame.transform.flip(active_surface, True, False) 
-    
+  def animate(self):
+    current_state_frames = self.frames.get(self.state, [])
 
-class Player(Character):
-  def __init__(self, pos_x, pos_y): 
-    super().__init__(pos_x, pos_y)
+    # Fall back to idle if the current animation has no frames.
+    if not current_state_frames:
+        idle_frames = self.frames.get("idle", [])
+
+        if not idle_frames:
+            raise RuntimeError(
+                f"No idle animation frames found for "
+                f"{self.character_path!r}. "
+                "Check the character's assets folder."
+            )
+
+        self.state = "idle"
+        self.frame_index = 0
+        current_state_frames = idle_frames
+
+    self.frame_index += self.animation_speed
+
+    if self.frame_index >= len(current_state_frames):
+        if self.state == "death":
+            self.frame_index = len(current_state_frames) - 1
+        else:
+            finished_state = self.state
+            self.frame_index = 0
+
+            if finished_state == "attack":
+                self.is_attacking = False
+            elif finished_state == "hurt":
+                self.is_hurt = False
+
+            if finished_state in ("attack", "hurt"):
+                self.state = "idle"
+                current_state_frames = self.frames.get("idle", [])
+
+                if not current_state_frames:
+                    return
+
+    frame_index = min(
+        int(self.frame_index),
+        len(current_state_frames) - 1
+    )
+
+    active_surface = current_state_frames[frame_index]
+
+    if self.direction == -1:
+        self.image = pygame.transform.flip(
+            active_surface, True, False
+        )
+    else:
+        self.image = active_surface
+      
+  def check_collision(self, grid_data): 
+    self.hit_wall = False 
+    self.rect.x += self.x_vel 
+    self.hitbox.centerx = self.rect.centerx 
+    self.check_boundaries(grid_data)
     
-    self.hitbox = pygame.Rect(0, 0, 50, 90)
-    self.hitbox.midbottom = self.rect.midbottom
-    self.jump_power = -15 
-    self.on_ground = False 
-    self.character = 'player'
-  
-     
-  def input(self):
-    if self.character == 'player':
-      keys = pygame.key.get_pressed()
-      current_action = 'idle'
-      self.x_vel = 0 
-      
-      if not self.is_attacking:
-        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-          self.direction = -1
-          current_action = 'run'
-          self.x_vel = -self.speed
-          
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-          self.direction = 1
-          current_action = 'run'
-          self.x_vel = self.speed  
-      
-      if keys[pygame.K_x]:
-        self.is_attacking = True 
-        current_action = 'attack'  
-      
-      if keys[pygame.K_SPACE]:
-        self.jump() 
-      
-    if current_action != self.state:
-      self.state = current_action
-      self.frame_index = 0 
-  
-  def jump(self):
-    if self.character == 'player':
-      if self.on_ground:
-        self.y_vel = self.jump_power
-        self.on_ground = False 
-      
-  def check_collision(self, grid_data):
-    
-    self.rect.x += self.x_vel
-    self.hitbox.centerx = self.rect.centerx
-    self.hitbox.x += self.x_vel 
-    self.check_boundries()
-    
-    player_col = int(self.hitbox.centerx // TILE_SIZE)
+    player_col = int(self.hitbox.centerx // TILE_SIZE) 
     player_row = int(self.hitbox.centery // TILE_SIZE) 
-    max_cols = len(grid_data[0]) if grid_data else GRID_COLS
+    max_cols = len(grid_data[0]) if grid_data else GRID_COLS 
     
     for r in range(max(0, player_row - 2), min(GRID_ROWS, player_row + 3)):
       for c in range(max(0, player_col - 2), min(max_cols, player_col + 3)):
-
-        if grid_data[r][c] in ['tile_0_0', 'tile_0_1', 'tile_0_2']:
+        
+        if grid_data[r][c] in SOLID_TILES:
           tile_rect = pygame.Rect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE) 
           if self.hitbox.colliderect(tile_rect):
             if self.x_vel > 0:
               self.hitbox.right = tile_rect.left
             elif self.x_vel < 0:
-              self.hitbox.left = tile_rect.right 
-            self.rect.centerx = self.hitbox.centerx
-
-    self.y_vel += GRAVITY
+              self.hitbox.left = tile_rect.right
+            self.hit_wall = True 
+            self.rect.centerx = self.hitbox.centerx 
+    
+    self.y_vel += GRAVITY 
     if self.y_vel > MAX_FALL_SPEED:
-      self.y_vel = MAX_FALL_SPEED
+      self.y_vel = MAX_FALL_SPEED 
       
-    self.rect.y += self.y_vel 
-    self.hitbox.y += self.y_vel 
+    self.rect.y += round(self.y_vel) 
+    self.hitbox.y += round(self.y_vel) 
     self.on_ground = False 
     
-    player_col = int(self.hitbox.centerx // TILE_SIZE)
-    player_row = int(self.hitbox.centery // TILE_SIZE)
+    player_col = int(self.hitbox.centerx // TILE_SIZE) 
+    player_row = int(self.hitbox.centery // TILE_SIZE) 
     
     for r in range(max(0, player_row - 2), min(GRID_ROWS, player_row + 3)):
       for c in range(max(0, player_col - 2), min(max_cols, player_col + 3)):
 
-        if grid_data[r][c] in ['tile_0_0', 'tile_0_1', 'tile_0_2']:
+        if grid_data[r][c] in SOLID_TILES:
           tile_rect = pygame.Rect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE) 
-          if self.hitbox.colliderect(tile_rect): 
+          if self.hitbox.colliderect(tile_rect):
             if self.y_vel > 0:
-              self.hitbox.bottom = tile_rect.top
-              self.y_vel = 0
-              self.on_ground = True
-            elif self.y_vel < 0:
-              self.hitbox.top = tile_rect.bottom
+              self.hitbox.bottom = tile_rect.top  
               self.y_vel = 0 
-            self.rect.bottom = self.hitbox.bottom + 45 
+              self.on_ground = True 
+            elif self.y_vel < 0:
+              self.hitbox.top = tile_rect.bottom 
+              self.y_vel = 0
+            self.rect.bottom = self.hitbox.bottom + FOOT_OFFSET 
   
-  def check_boundries(self):
-    map_width = max((len(row) for row in map_data), default=GRID_COLS) * TILE_SIZE
-    max_x = max(0, map_width - self.rect.width)
-    if self.rect.x <= 0: 
+  def check_boundaries(self, grid_data):
+    map_width = max((len(row) for row in grid_data), default=GRID_COLS) * TILE_SIZE
+    max_x = max(0, map_width - self.rect.width) 
+    if self.rect.x <= 0:
       self.rect.x = 0 
-      self.hitbox.centerx = self.rect.centerx
-    elif self.rect.x >= max_x:
+      self.hitbox.centerx = self.rect.centerx 
+      self.hit_wall = True 
+    elif self.rect.x >= max_x: 
       self.rect.x = max_x 
       self.hitbox.centerx = self.rect.centerx
-      
-  def draw(self):
-    screen.blit(self.image, (self.rect.x - camera_x, self.rect.y))
+      self.hit_wall = True 
+    
+  def draw(self, camera_x):
+    screen.blit(self.image, (self.rect.x - camera_x, self.rect.y))     
+
+class Player(Character):
+  def __init__(self, pos_x, pos_y): 
+    super().__init__(pos_x, pos_y, 'hero')
+    
+    self.jump_power = -15 
+    self.character = 'player'
+    
+  
+     
+  def input(self):
+    keys = pygame.key.get_pressed()
+    self.x_vel = 0 
+    
+    if self.can_act():
+      if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+        self.direction = -1 
+        self.x_vel = -self.speed 
+        
+      if keys[pygame.K_RIGHT] or keys[pygame.K_d]: 
+        self.direction = 1
+        self.x_vel = self.speed  
+    
+    if keys[pygame.K_x]:
+      self.is_attacking = True 
+    
+    if keys[pygame.K_SPACE]:
+      self.jump() 
+    
+    self.set_state(self.pick_state()) 
+  
+  def jump(self):
+    if self.on_ground:
+      self.y_vel = self.jump_power
+      self.on_ground = False 
+
   
   def update(self, grid_data):
     global camera_x
@@ -253,52 +329,25 @@ class Player(Character):
     map_width = max((len(row) for row in map_data), default=GRID_COLS) * TILE_SIZE
     camera_x = max(0, min(self.rect.x - WIDTH // 2, map_width - WIDTH))
     self.animate()
-    self.draw()
 
 
-# class Enemy(pygame.sprite.Sprite):
-#   def __init__(self, pos_x, pos_y): 
-#     super().__init__(pos_x, pos_y) 
+class Skeleton(Character):
+  def __init__(self, pos_x, pos_y):
+    super().__init__(pos_x, pos_y, 'enemy') 
+    self.speed = 2 
+    self.character = 'enemy' 
     
-#     self.frames = {
-#           'idle' : [pygame.image.load('assets/enemy/frame_0.png').convert_alpha()],
-#           'run': [
-#             pygame.image.load('assets/enemy/frame_1.png').convert_alpha(),
-#             pygame.image.load('assets/enemy/frame_2.png').convert_alpha(),
-#           ],
-#           'attack' : [
-#             pygame.image.load('assets/enemy/frame_3.png').convert_alpha(),
-#             pygame.image.load('assets/enemy/frame_4.png').convert_alpha(),
-#             pygame.image.load('assets/enemy/frame_5.png').convert_alpha(),
-#             pygame.image.load('assets/enemy/frame_6.png').convert_alpha(), 
-#           ],
-#           'hurt' : [
-#             pygame.image.load("assets/enemy/frame_7.png").convert_alpha(),
-#           ],
-#           'death' : [
-#             pygame.image.load('assets/enemy/frame_7.png').convert_alpha(),
-#             pygame.image.load('assets/enemy/frame_8.png').convert_alpha(),
-#             pygame.image.load('assets/enemy/frame_9.png').convert_alpha(),
-#           ]
-#         }
-    
-#     self.direction = 1  
-#     self.speed = 5
-#     self.character = 'enemy' 
-  
-#   def move(self, screen):
-#     collision_line = (screen, 'red', self.x, self.x * self.direction + 30)
-#     pygame.draw.line(collision_line) 
-    
-  
-  # def update(self, screen):
-  #   self.move(screen)  
-  
-  
+  def update(self, grid_data): 
+    self.x_vel = self.speed * self.direction if self.can_act() else 0 
+    self.check_collision(grid_data) 
+    if self.hit_wall:
+      self.direction *= -1 
+    self.set_state(self.pick_state()) 
+    self.animate() 
   
 
 player = Player(50, 50)
-# enemy = Enemy(100, 50) 
+enemy = Skeleton(100, 50) 
 map_data = load_map()
 tile_images = load_tile_images() 
 camera_x = 0
@@ -312,17 +361,24 @@ while True:
   
   for event in pygame.event.get():
     if event.type == pygame.QUIT:
+      pygame.quit() 
       sys.exit() 
     if event.type == pygame.KEYDOWN:
       if event.key == pygame.K_ESCAPE:
+        pygame.quit()
         sys.exit()
-      if event.key == pygame.K_SPACE or event.key == pygame.K_UP:
-        player.jump()
+      
       if event.key == pygame.K_r:
         map_data = load_map() 
-  
-  player.update(map_data)
-  # enemy.update(map_data) 
-  pygame.display.update() 
-
-pygame.quit()
+      if event.key == pygame.K_h: 
+        player.take_hit()
+      if event.key == pygame.K_k:
+        enemy.take_hit()
+    
+    player.update(map_data)
+    enemy.update(map_data) 
+    
+    draw_map(screen, map_data, tile_images, camera_x)
+    enemy.draw(camera_x)
+    player.draw(camera_x) 
+    pygame.display.update()
