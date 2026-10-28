@@ -41,3 +41,6 @@ If you prefer to run the raw code, follow these steps in your terminal or PowerS
    ```bash
    python main.py
    ```
+<img width="1003" height="634" alt="Screenshot 2026-10-29 014540" src="https://github.com/user-attachments/assets/e4e36233-2278-4951-93fe-ee07870df81a" />
+   <img width="1243" height="783" alt="Screenshot 2026-10-28 134912" src="https://github.com/user-attachments/assets/6a8606ad-9a19-453a-bcc3-90729a9b2567" />
+
