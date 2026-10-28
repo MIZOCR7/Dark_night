@@ -1,0 +1,43 @@
+# The Dark Night
+
+Welcome to **The Dark Night**, a Halloween-themed action game where a solitary knight braves the dark, surrounded by endless skeletons descending from the sky. 
+
+I am incredibly proud to have built this entire game from scratch! Instead of relying on heavy game engines like Unity or Godot, I used **pure Python and Pygame**, hand-coding everything from scratch—including the custom physics behaviors.
+
+---
+
+## Controls
+
+| Key | Action |
+| :--- | :--- |
+| **A** or **Left Arrow** | Move Left |
+| **D** or **Right Arrow** | Move Right |
+| **Space** | Jump |
+| **X** | Attack |
+| **R** | Restart |
+
+---
+
+## How to Run the Game
+
+You can play the game in one of two ways:
+
+### Option 1: Quick Play (No Setup Required)
+1. Download the standalone executable (`.exe`) from the https://github.com/MIZOCR7/Dark_night/releases/tag/v1.
+2. Double-click the file to launch the game instantly. No Python or extra dependencies needed!
+
+### Option 2: Run from Source Code
+If you prefer to run the raw code, follow these steps in your terminal or PowerShell:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/MIZOCR7/Dark_night
+   ```
+2. Navigate into the project folder and install Pygame (assuming you have Python installed):
+   ```bash
+   pip install pygame
+   ```
+3. Run the game:
+   ```bash
+   python main.py
+   ```
