@@ -118,7 +118,7 @@ class Character(pygame.sprite.Sprite):
     if self.frames.get('idle') and len(self.frames['idle']) > 0:
       self.image = self.frames['idle'][0] 
     else:
-      self.image = pygame.Surface((50, 50))
+      self.image = pygame.Surface((50, 50)) 
       self.image.fill((255, 0, 0))
     
     self.is_attacking = False 
@@ -431,6 +431,51 @@ class Skeleton(Character):
 
 font = pygame.font.SysFont(None, 80) 
 
+story_font = pygame.font.Font('font.otf', 26) 
+
+story_font = pygame.font.Font('font.otf', 26)
+
+def story(speed=10.0):
+  story_lines = [
+    "Welcome to the Dark Night",
+    "Only the Real Soul will win",
+    "Please, Play this game at three AM and in a Dark Place.",
+    "Good Luck",
+    "Press ENTER to begin your journey...",
+  ]
+  total = sum(len(line) for line in story_lines)
+  char_count = 0.0
+
+  while True:
+    dt = clock.tick(FPS) / 1000
+    char_count = min(char_count + speed * dt, total) 
+
+    for event in pygame.event.get():
+      if event.type == pygame.QUIT:
+        pygame.quit()
+        sys.exit()
+      if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_ESCAPE:
+          pygame.quit()
+          sys.exit()
+        if event.key == pygame.K_RETURN:
+          if char_count >= total:
+            return                 
+          char_count = total      
+
+    screen.fill('black')
+    chars_remaining = int(char_count)
+    for i, line in enumerate(story_lines):
+      if chars_remaining <= 0:
+        break
+      visible_text = line[:chars_remaining]
+      chars_remaining -= len(line)
+      color = '#FF7518' if i == len(story_lines) - 1 else '#39FF14'
+      surf = story_font.render(visible_text, True, color)
+      screen.blit(surf, surf.get_rect(center=(WIDTH // 2, 150 + i * 50)))
+    pygame.display.flip() 
+
+
 def reset_game():
   global player, enemies, map_data, next_spawn
   player = Player(100, 50)
@@ -444,6 +489,7 @@ tile_images = load_tile_images()
 camera_x = 0
 
 
+story() 
 
 while True:
   clock.tick(FPS) 
@@ -460,7 +506,7 @@ while True:
     if event.type == pygame.QUIT:
       pygame.quit() 
       sys.exit() 
-    if event.type == pygame.KEYDOWN:
+    if event.type == pygame.KEYDOWN: 
       if event.key == pygame.K_ESCAPE:
         pygame.quit()
         sys.exit()
@@ -469,8 +515,10 @@ while True:
         reset_game() 
         
   
+  
+
   now = pygame.time.get_ticks()
-  alive = sum(1 for e in enemies if not e.is_dead)
+  alive = sum(1 for e in enemies if not e.is_dead) 
   if not player.is_dead and now >= next_spawn and alive < MAX_ENEMIES:
     map_w = len(map_data[0]) * TILE_SIZE
     spawn_x = random.randint(0, map_w - 150) 
@@ -491,7 +539,7 @@ while True:
   player.draw(camera_x) 
   
   if player.is_dead:
-    reset_game() 
+    reset_game()
   
    
   pygame.display.update()
