@@ -15,9 +15,9 @@ GRAVITY = 0.75
 MAX_FALL_SPEED = 20
 SOLID_TILES = ['tile_0_0', 'tile_0_1', 'tile_0_2']
 FOOT_OFFSET = 45 
-STATES = ['idle', 'run', 'attack', 'hurt', 'death', 'chase', 'patrol'] 
+STATES = ['idle', 'run', 'attack', 'hurt', 'death'] 
 
-clock = pygame.time.Clock() 
+clock = pygame.time.Clock()  
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) 
 pygame.display.set_caption("Dark night") 
 
@@ -91,7 +91,9 @@ def frame_number(filename):
 class Character(pygame.sprite.Sprite):
   def __init__(self, pos_x, pos_y, character_path):
     super().__init__() 
-    self.x = pos_x
+    self.start_pointx = pos_x 
+    self.start_pointy = pos_y 
+    self.x = pos_x 
     self.y = pos_y 
     self.direction = 1 
     self.speed = 5 
@@ -121,7 +123,16 @@ class Character(pygame.sprite.Sprite):
     self.y_vel = 0
     self.on_ground = False
     self.hit_wall = False 
+  
+  def take_damage(self):
+    self.knocked = True 
+    self.knockback_timer = 0 
+    self.knockback_duration = 15 
+    direction = 1 if self.rect.centerx < enemy.x else -1 
     
+    self.x_vel *= direction * 8 
+    self.y_vel = -10 
+    self.set_state('hurt') 
   
   def load_frames(self):
     animation_dict = {}
@@ -189,7 +200,7 @@ class Character(pygame.sprite.Sprite):
             self.frame_index = len(current_state_frames) - 1
         else:
             finished_state = self.state
-            self.frame_index = 0
+            self.frame_index = 0 
 
             if finished_state == "attack":
                 self.is_attacking = False
@@ -212,7 +223,7 @@ class Character(pygame.sprite.Sprite):
 
     if (self.direction == 1) != self.faces_right:
         self.image = pygame.transform.flip(
-            active_surface, True, False
+            active_surface, True, False 
         )
     else:
         self.image = active_surface
@@ -275,12 +286,22 @@ class Character(pygame.sprite.Sprite):
       self.hit_wall = True 
     elif self.rect.x >= max_x: 
       self.rect.x = max_x 
-      self.hitbox.centerx = self.rect.centerx
+      self.hitbox.centerx = self.rect.centerx 
       self.hit_wall = True 
+    
+    if self.rect.y >= HEIGHT + 50:
+      self.x = self.start_pointx
+      self.y = self.start_pointy
+      self.rect.x = self.start_pointx
+      self.rect.y = self.start_pointy 
+      self.hitbox.midbottom = (self.rect.centerx, self.rect.bottom - FOOT_OFFSET) 
+      self.y_vel = 0 
+      self.x_vel = 0 
     
   def draw(self, camera_x):
     screen.blit(self.image, (self.rect.x - camera_x, self.rect.y))     
-
+  
+  
 class Player(Character):
   def __init__(self, pos_x, pos_y): 
     super().__init__(pos_x, pos_y, 'hero') 
@@ -293,6 +314,7 @@ class Player(Character):
      
   def input(self):
     keys = pygame.key.get_pressed()
+    attack_keys = pygame.key.get_just_pressed() 
     self.x_vel = 0 
     
     if self.can_act():
@@ -301,13 +323,13 @@ class Player(Character):
         self.x_vel = -self.speed 
         
       if keys[pygame.K_RIGHT] or keys[pygame.K_d]: 
-        self.direction = 1
+        self.direction = 1 
         self.x_vel = self.speed  
     
-      if keys[pygame.K_x]:  
+      if attack_keys[pygame.K_x]:  
         self.is_attacking = True 
     
-      if keys[pygame.K_SPACE]:  
+      if keys[pygame.K_SPACE]: 
         self.jump() 
     
     self.set_state(self.pick_state()) 
@@ -336,12 +358,19 @@ class Skeleton(Character):
     self.speed = 2 
     self.direction = -1
     self.character = 'enemy' 
-    self.patrol_speed = 2
+    self.patrol_speed = 2 
     self.chase_speed = 6
     self.vision_range = 50
     self.vision_height = 60 
     self.vision_rect = pygame.Rect(0, 0, self.vision_range, self.vision_height) 
+    self.status = 'chase'
     
+  
+  # def collision(self, player):
+  #   if self.rect.colliderect(player.rect) and self.is_attacking:
+  #     player.x_vel = -self.speed * self.knockback_dir 
+  #     player.y_vel = -10  
+  #     player.on_ground = False 
   
   def ai_move(self, player):
     if self.direction == 1:
@@ -354,10 +383,13 @@ class Skeleton(Character):
     
     if distance_to_player < 20 and pygame.sprite.collide_rect(self, player):
       self.state = 'attack'
+      self.is_attacking = True 
     elif self.vision_rect.colliderect(player.rect):
-      self.state = 'chase'
+      self.status = 'chase' 
+      self.state = 'run' 
     else:
-      self.state = 'patrol' 
+      self.status = 'patrol' 
+      
     
     
     if self.state == 'patrol':
@@ -378,19 +410,21 @@ class Skeleton(Character):
     elif self.state == 'attack':
       pass  
   
-  def update(self, grid_data, player): 
+  def update(self, grid_data, player):
     self.x_vel = self.speed * self.direction if self.can_act() else 0 
     self.check_collision(grid_data) 
     if self.hit_wall: 
       self.direction *= -1 
     self.set_state(self.pick_state()) 
     self.animate() 
+    # self.collision(player) 
     self.ai_move(player)
     
   
 
 player = Player(50, 50)
 enemy = Skeleton(100, 50) 
+enemy2 = Skeleton(1000, 50) 
 map_data = load_map()
 tile_images = load_tile_images() 
 camera_x = 0
@@ -418,9 +452,11 @@ while True:
     
   player.update(map_data)  
   enemy.update(map_data, player) 
+  enemy2.update(map_data, player) 
   
   draw_map(screen, map_data, tile_images, camera_x) 
 
   enemy.draw(camera_x)
+  enemy2.draw(camera_x)
   player.draw(camera_x) 
   pygame.display.update()
