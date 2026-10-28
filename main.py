@@ -2,8 +2,11 @@ import pygame
 import sys
 import os
 import json
+import random 
 
 pygame.init()
+
+pygame.font.init() 
 
 WIDTH = 1000
 HEIGHT = 600 
@@ -16,6 +19,11 @@ MAX_FALL_SPEED = 20
 SOLID_TILES = ['tile_0_0', 'tile_0_1', 'tile_0_2']
 FOOT_OFFSET = 45 
 STATES = ['idle', 'run', 'attack', 'hurt', 'death'] 
+WIN_RECT = pygame.Rect(5740, 100, 500, 500)
+MAX_ENEMIES = 50
+
+small_font = pygame.font.Font('font.otf', 20) 
+large_font = pygame.font.Font('font.otf', 64) 
 
 clock = pygame.time.Clock()  
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) 
@@ -332,32 +340,35 @@ class Player(Character):
     
     self.hp = 10 
     self.has_won = False 
-  
+    self.control_lock = False 
+    
   
   def win(self):
-    win_rect = pygame.Rect(5740 - camera_x, 500, 100, 500)
-    pygame.draw.rect(screen, 'red', win_rect) 
-  
+    if not self.has_won:
+      if player.rect.colliderect(WIN_RECT): 
+        self.has_won = True 
+    
   
   def input(self):
     keys = pygame.key.get_pressed()
     attack_keys = pygame.key.get_just_pressed() 
     self.x_vel = 0 
     
-    if self.can_act():
-      if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        self.direction = -1 
-        self.x_vel = -self.speed 
-        
-      if keys[pygame.K_RIGHT] or keys[pygame.K_d]: 
-        self.direction = 1 
-        self.x_vel = self.speed  
-    
-      if attack_keys[pygame.K_x]:  
-        self.is_attacking = True 
-    
-      if keys[pygame.K_SPACE]: 
-        self.jump() 
+    if not self.control_lock:
+      if self.can_act():
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+          self.direction = -1 
+          self.x_vel = -self.speed 
+          
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]: 
+          self.direction = 1 
+          self.x_vel = self.speed  
+      
+        if attack_keys[pygame.K_x]:  
+          self.is_attacking = True 
+      
+        if keys[pygame.K_SPACE]: 
+          self.jump() 
     
     self.set_state(self.pick_state()) 
   
@@ -421,19 +432,29 @@ class Skeleton(Character):
 font = pygame.font.SysFont(None, 80) 
 
 def reset_game():
-  global player, enemies, map_data 
-  player = Player(5000, 50)
-  enemies = [Skeleton(300, 50), Skeleton(1000, 50), Skeleton(3000, 50)] 
+  global player, enemies, map_data, next_spawn
+  player = Player(100, 50)
+  enemies = [] 
   map_data = load_map()
+  next_spawn = pygame.time.get_ticks() + 200 
+  player.control_lock = False
 
 reset_game() 
 tile_images = load_tile_images() 
 camera_x = 0
 
+
+
 while True:
   clock.tick(FPS) 
   screen.fill('black')
   screen.blit(background, (0,0))
+  
+  if player.has_won:
+    player.control_lock = True 
+    win_text_surface = large_font.render("You Win", True, '#FF7518') 
+    win_text_rect = win_text_surface.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    screen.blit(win_text_surface, win_text_rect) 
   
   for event in pygame.event.get():
     if event.type == pygame.QUIT:
@@ -447,7 +468,16 @@ while True:
       if event.key == pygame.K_r: 
         reset_game() 
         
+  
+  now = pygame.time.get_ticks()
+  alive = sum(1 for e in enemies if not e.is_dead)
+  if not player.is_dead and now >= next_spawn and alive < MAX_ENEMIES:
+    map_w = len(map_data[0]) * TILE_SIZE
+    spawn_x = random.randint(0, map_w - 150) 
+    enemies.append(Skeleton(spawn_x, 50)) 
+    next_spawn = now + random.randint(1500, 4000)
     
+ 
   player.update(map_data)  
   for e in enemies:
     e.update(map_data, player) 
