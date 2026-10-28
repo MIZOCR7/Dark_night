@@ -8,6 +8,8 @@ pygame.init()
 
 pygame.font.init() 
 
+pygame.mixer.init()
+
 WIDTH = 1000
 HEIGHT = 600 
 FPS = 60
@@ -19,7 +21,7 @@ MAX_FALL_SPEED = 20
 SOLID_TILES = ['tile_0_0', 'tile_0_1', 'tile_0_2']
 FOOT_OFFSET = 45 
 STATES = ['idle', 'run', 'attack', 'hurt', 'death'] 
-WIN_RECT = pygame.Rect(5740, 100, 500, 500)
+WIN_RECT = pygame.Rect(5840, 100, 500, 500)
 MAX_ENEMIES = 50
 
 small_font = pygame.font.Font('font.otf', 20) 
@@ -34,6 +36,13 @@ background_path = os.path.join("assets", "background_night.png")
 
 background = pygame.image.load(background_path).convert_alpha() 
 background = pygame.transform.scale(background, (WIDTH, HEIGHT)) 
+
+
+typing = pygame.mixer.Sound('audio/typing.mp3')
+typing.set_volume(0.5)
+
+background_music = pygame.mixer.Sound('audio/background.mp3')
+background_music.set_volume(0.3) 
 
 
 def load_tile_images():
@@ -124,14 +133,24 @@ class Character(pygame.sprite.Sprite):
     self.is_attacking = False 
     self.is_hurt = False 
     self.is_dead = False 
-    self.hp = 3
-    
+    self.max_hp = 3 
+    self.hp = self.max_hp
     self.x_vel = 0
     self.y_vel = 0
     self.on_ground = False
     self.hit_wall = False 
     self.knock_x = 0 
   
+  def draw_health(self, camera_x):
+    if self.is_dead:
+      return 
+    dash_w, gap = 12, 4
+    total = self.max_hp * (dash_w + gap) - gap
+    x = self.hitbox.centerx - total // 2 - camera_x
+    y = self.hitbox.top - 12
+    for i in range(self.max_hp):
+      color = (220, 40, 40) if i < self.hp else (70, 70, 70) 
+      pygame.draw.rect(screen, color, (x + i * (dash_w + gap), y, dash_w, 5))
   
   def load_frames(self):
     animation_dict = {}
@@ -338,7 +357,8 @@ class Player(Character):
     self.jump_power = -15 
     self.character = 'player'
     
-    self.hp = 10 
+    self.max_hp = 10 
+    self.hp = 10
     self.has_won = False 
     self.control_lock = False 
     
@@ -348,6 +368,11 @@ class Player(Character):
       if player.rect.colliderect(WIN_RECT): 
         self.has_won = True 
     
+  def take_hit(self, source_x):
+    if self.has_won: 
+      return
+    super().take_hit(source_x)
+  
   
   def input(self):
     keys = pygame.key.get_pressed()
@@ -406,17 +431,18 @@ class Skeleton(Character):
     
   
   def ai_move(self, player):
-    if self.is_dead or player.is_dead or not self.can_act():
-      return
-    dx = player.rect.centerx - self.rect.centerx 
-    
-    if abs(dx) < 300 and abs(player.rect.centery - self.rect.centery) < 100:
-      self.direction = 1 if dx > 0 else -1 
-      self.speed = 3 
-    else:
-      self.speed = 2
-    if self.attack_rect().colliderect(player.hitbox):
-      self.is_attacking = True 
+    if not player.has_won:
+      if self.is_dead or player.is_dead or not self.can_act():
+        return
+      dx = player.rect.centerx - self.rect.centerx 
+      
+      if abs(dx) < 300 and abs(player.rect.centery - self.rect.centery) < 100:
+        self.direction = 1 if dx > 0 else -1 
+        self.speed = 3 
+      else:
+        self.speed = 2
+      if self.attack_rect().colliderect(player.hitbox):
+        self.is_attacking = True 
   
   def update(self, grid_data, player):
     self.x_vel = self.speed * self.direction if self.can_act() else 0 
@@ -475,10 +501,18 @@ def story(speed=10.0):
       screen.blit(surf, surf.get_rect(center=(WIDTH // 2, 150 + i * 50)))
     pygame.display.flip() 
 
+heart_img = pygame.transform.scale(pygame.image.load('assets/heart.png').convert_alpha(), (30, 30))
+
+def draw_hud():
+  for i in range(max(player.hp, 0)):
+    screen.blit(heart_img, (10 + i * 35, 10))
+    
+
+
 
 def reset_game():
   global player, enemies, map_data, next_spawn
-  player = Player(100, 50)
+  player = Player(100, 50) 
   enemies = [] 
   map_data = load_map()
   next_spawn = pygame.time.get_ticks() + 200 
@@ -488,8 +522,10 @@ reset_game()
 tile_images = load_tile_images() 
 camera_x = 0
 
-
+typing.play() 
 story() 
+background_music.play(-1) 
+
 
 while True:
   clock.tick(FPS) 
@@ -536,7 +572,9 @@ while True:
   
   for e in enemies:
     e.draw(camera_x)
+    e.draw_health(camera_x)
   player.draw(camera_x) 
+  draw_hud() 
   
   if player.is_dead:
     reset_game()
