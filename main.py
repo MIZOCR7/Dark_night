@@ -23,12 +23,8 @@ pygame.display.set_caption("Dark night")
 
 background_path = os.path.join("assets", "background_night.png")
 
-if not os.path.exists(background_path):
-    raise FileNotFoundError(
-        f"Background image not found: {background_path}"
-    )
 
-background = pygame.image.load(background_path).convert_alpha()
+background = pygame.image.load(background_path).convert_alpha() 
 background = pygame.transform.scale(background, (WIDTH, HEIGHT)) 
 
 
@@ -108,6 +104,9 @@ class Character(pygame.sprite.Sprite):
     self.hitbox = pygame.Rect(0, 0, 50, 90) 
     self.hitbox.midbottom = (self.rect.centerx, self.rect.bottom - FOOT_OFFSET) 
     
+    self.hit_done = False 
+    self.invincible_until = 0 
+    
     if self.frames.get('idle') and len(self.frames['idle']) > 0:
       self.image = self.frames['idle'][0] 
     else:
@@ -117,22 +116,14 @@ class Character(pygame.sprite.Sprite):
     self.is_attacking = False 
     self.is_hurt = False 
     self.is_dead = False 
-    self.hp = 3 
+    self.hp = 3
     
     self.x_vel = 0
     self.y_vel = 0
     self.on_ground = False
     self.hit_wall = False 
+    self.knock_x = 0 
   
-  def take_damage(self):
-    self.knocked = True 
-    self.knockback_timer = 0 
-    self.knockback_duration = 15 
-    direction = 1 if self.rect.centerx < enemy.x else -1 
-    
-    self.x_vel *= direction * 8 
-    self.y_vel = -10 
-    self.set_state('hurt') 
   
   def load_frames(self):
     animation_dict = {}
@@ -167,17 +158,40 @@ class Character(pygame.sprite.Sprite):
       return 'run'
     return 'idle' 
   
-  def take_hit(self):
-    if self.is_dead or self.is_hurt:
+  def take_hit(self, source_x):
+    now = pygame.time.get_ticks() 
+    if self.is_dead or self.is_hurt or now < self.invincible_until:
       return
+    self.invincible_until = now + 800
     self.hp -= 1
     self.is_attacking = False
+    self.hit_done = False 
+    self.knock_x = 16 if self.rect.centerx > source_x else -16 
+    self.y_vel = -10 
+    self.on_ground = False 
     if self.hp <= 0:
       self.is_dead = True
       self.set_state('death')
     elif len(self.frames['hurt']) > 0:
       self.is_hurt = True
       self.set_state('hurt') 
+    
+  def attack_rect(self):
+    r = pygame.Rect(0, 0, 60, self.hitbox.height)
+    if self.direction == 1:
+      r.midleft = self.hitbox.midright
+    else:
+      r.midright = self.hitbox.midleft
+    return r 
+  
+  def try_hit(self, target):
+    frames = self.frames['attack'] 
+    if (self.is_attacking and not self.hit_done and frames 
+        and self.frame_index >= len(frames) / 2
+        and self.attack_rect().colliderect(target.hitbox)):
+      target.take_hit(self.rect.centerx)
+      self.hit_done = True 
+  
   
   def animate(self):
     current_state_frames = self.frames.get(self.state, [])
@@ -204,6 +218,7 @@ class Character(pygame.sprite.Sprite):
 
             if finished_state == "attack":
                 self.is_attacking = False
+                self.hit_done = False
             elif finished_state == "hurt":
                 self.is_hurt = False
 
@@ -230,7 +245,12 @@ class Character(pygame.sprite.Sprite):
       
   def check_collision(self, grid_data): 
     self.hit_wall = False 
-    self.rect.x += self.x_vel 
+    if self.knock_x: 
+      self.x_vel = round(self.knock_x) 
+      self.knock_x *= 0.92 
+      if abs(self.knock_x) < 1:
+        self.knock_x = 0
+    self.rect.x += self.x_vel  
     self.hitbox.centerx = self.rect.centerx 
     self.check_boundaries(grid_data)
     
@@ -250,6 +270,7 @@ class Character(pygame.sprite.Sprite):
               self.hitbox.left = tile_rect.right
             self.hit_wall = True 
             self.rect.centerx = self.hitbox.centerx 
+            self.knock_x = 0
     
     self.y_vel += GRAVITY 
     if self.y_vel > MAX_FALL_SPEED:
@@ -289,7 +310,7 @@ class Character(pygame.sprite.Sprite):
       self.hitbox.centerx = self.rect.centerx 
       self.hit_wall = True 
     
-    if self.rect.y >= HEIGHT + 50:
+    if self.rect.y >= HEIGHT + 50: 
       self.x = self.start_pointx
       self.y = self.start_pointy
       self.rect.x = self.start_pointx
@@ -309,9 +330,15 @@ class Player(Character):
     self.jump_power = -15 
     self.character = 'player'
     
-    
+    self.hp = 10 
+    self.has_won = False 
   
-     
+  
+  def win(self):
+    win_rect = pygame.Rect(5740 - camera_x, 500, 100, 500)
+    pygame.draw.rect(screen, 'red', win_rect) 
+  
+  
   def input(self):
     keys = pygame.key.get_pressed()
     attack_keys = pygame.key.get_just_pressed() 
@@ -349,6 +376,7 @@ class Player(Character):
     map_width = max((len(row) for row in grid_data), default=GRID_COLS) * TILE_SIZE  
     camera_x = max(0, min(self.rect.x - WIDTH // 2, map_width - WIDTH))
     self.animate()
+    self.win() 
 
 
 class Skeleton(Character):
@@ -366,49 +394,18 @@ class Skeleton(Character):
     self.status = 'chase'
     
   
-  # def collision(self, player):
-  #   if self.rect.colliderect(player.rect) and self.is_attacking:
-  #     player.x_vel = -self.speed * self.knockback_dir 
-  #     player.y_vel = -10  
-  #     player.on_ground = False 
-  
   def ai_move(self, player):
-    if self.direction == 1:
-      self.vision_rect.left = self.rect.right
+    if self.is_dead or player.is_dead or not self.can_act():
+      return
+    dx = player.rect.centerx - self.rect.centerx 
+    
+    if abs(dx) < 300 and abs(player.rect.centery - self.rect.centery) < 100:
+      self.direction = 1 if dx > 0 else -1 
+      self.speed = 3 
     else:
-      self.vision_rect.right = self.rect.left 
-    
-    self.vision_rect.centery = self.rect.centery 
-    distance_to_player = abs(player.rect.centerx - self.rect.centerx) 
-    
-    if distance_to_player < 20 and pygame.sprite.collide_rect(self, player):
-      self.state = 'attack'
+      self.speed = 2
+    if self.attack_rect().colliderect(player.hitbox):
       self.is_attacking = True 
-    elif self.vision_rect.colliderect(player.rect):
-      self.status = 'chase' 
-      self.state = 'run' 
-    else:
-      self.status = 'patrol' 
-      
-    
-    
-    if self.state == 'patrol':
-      self.rect.x += self.patrol_speed * self.direction
-      if self.rect.right > 700:
-        self.direction = -1 
-      elif self.rect.left < 100:
-        self.direction = 1 
-    
-    elif self.state == 'chase':
-      if player.rect.centerx > self.rect.centerx:
-        self.direction = 1
-        self.rect.x += self.chase_speed 
-      else:
-        self.direction = -1
-        self.rect.x -= self.chase_speed 
-    
-    elif self.state == 'attack':
-      pass  
   
   def update(self, grid_data, player):
     self.x_vel = self.speed * self.direction if self.can_act() else 0 
@@ -417,15 +414,19 @@ class Skeleton(Character):
       self.direction *= -1 
     self.set_state(self.pick_state()) 
     self.animate() 
-    # self.collision(player) 
+     
     self.ai_move(player)
     
-  
 
-player = Player(50, 50)
-enemy = Skeleton(100, 50) 
-enemy2 = Skeleton(1000, 50) 
-map_data = load_map()
+font = pygame.font.SysFont(None, 80) 
+
+def reset_game():
+  global player, enemies, map_data 
+  player = Player(5000, 50)
+  enemies = [Skeleton(300, 50), Skeleton(1000, 50), Skeleton(3000, 50)] 
+  map_data = load_map()
+
+reset_game() 
 tile_images = load_tile_images() 
 camera_x = 0
 
@@ -443,20 +444,24 @@ while True:
         pygame.quit()
         sys.exit()
       
-      if event.key == pygame.K_r:
-        map_data = load_map() 
-      if event.key == pygame.K_h: 
-        player.take_hit()
-      if event.key == pygame.K_k:
-        enemy.take_hit()
+      if event.key == pygame.K_r: 
+        reset_game() 
+        
     
   player.update(map_data)  
-  enemy.update(map_data, player) 
-  enemy2.update(map_data, player) 
-  
+  for e in enemies:
+    e.update(map_data, player) 
+    e.try_hit(player) 
+    player.try_hit(e) 
+    
   draw_map(screen, map_data, tile_images, camera_x) 
-
-  enemy.draw(camera_x)
-  enemy2.draw(camera_x)
+  
+  for e in enemies:
+    e.draw(camera_x)
   player.draw(camera_x) 
+  
+  if player.is_dead:
+    reset_game() 
+  
+   
   pygame.display.update()
