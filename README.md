@@ -1,8 +1,8 @@
 # The Dark Night
 
-Welcome to **The Dark Night**, a Halloween-themed action game where a solitary knight braves the dark, surrounded by endless skeletons descending from the sky. 
+Welcome to **The Dark Night**, a Halloween theme game where a knight walks in the dark night, note that U will face endless skeletons coming from the sky. 
 
-I am incredibly proud to have built this entire game from scratch! Instead of relying on heavy game engines like Unity or Godot, I used **pure Python and Pygame**, hand-coding everything from scratch—including the custom physics behaviors.
+I am incredibly proud to have built this entire game from scratch! Instead of relying on heavy game engines like Unity or Godot, I used **pure Python and Pygame**, even simple physics theories I have written on my own.
 
 ---
 
