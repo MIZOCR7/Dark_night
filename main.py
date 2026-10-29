@@ -4,6 +4,12 @@ import os
 import json
 import random 
 
+
+def resource_path(relative):
+  base = getattr(sys, '_MEIPASS', os.path.abspath('.'))
+  return os.path.join(base, relative)
+
+
 pygame.init()
 
 pygame.font.init() 
@@ -24,29 +30,29 @@ STATES = ['idle', 'run', 'attack', 'hurt', 'death']
 WIN_RECT = pygame.Rect(5840, 100, 500, 500)
 MAX_ENEMIES = 50
 
-small_font = pygame.font.Font('font.otf', 20) 
-large_font = pygame.font.Font('font.otf', 64) 
+small_font = pygame.font.Font(resource_path('font.otf'), 20)
+large_font = pygame.font.Font(resource_path('font.otf'), 64)
 
 clock = pygame.time.Clock()  
 screen = pygame.display.set_mode((WIDTH, HEIGHT)) 
 pygame.display.set_caption("Dark night") 
 
-background_path = os.path.join("assets", "background_night.png")
+background_path = resource_path(os.path.join("assets", "background_night.png"))
 
 
 background = pygame.image.load(background_path).convert_alpha() 
 background = pygame.transform.scale(background, (WIDTH, HEIGHT)) 
 
 
-typing = pygame.mixer.Sound('audio/typing.mp3')
+typing = pygame.mixer.Sound(resource_path('audio/typing.mp3'))
 typing.set_volume(0.5)
 
-background_music = pygame.mixer.Sound('audio/background.mp3')
+background_music = pygame.mixer.Sound(resource_path('audio/background.mp3'))
 background_music.set_volume(0.3) 
 
 
 def load_tile_images():
-  tiles_folder = 'assets/tiles'
+  tiles_folder = resource_path('assets/tiles')
   tiles = {}
   if os.path.exists(tiles_folder):
     for filename in os.listdir(tiles_folder):
@@ -66,18 +72,16 @@ def draw_map(screen, grid_data, tile_images, camera_x=0):
         screen.blit(tile_images[tile_name], (col_idx * TILE_SIZE - camera_x, row_idx * TILE_SIZE))
 
 def load_map(filename="map_data.json"):
+    filename = resource_path(filename)
     if not os.path.exists(filename):
         return [
             [None for _ in range(GRID_COLS)]
             for _ in range(GRID_ROWS)
         ]
-
     with open(filename, "r") as f:
         data = json.load(f)
-
     if not data:
         data = []
-
     map_cols = max([GRID_COLS] + [len(row) for row in data if isinstance(row, list)])
 
     normalized_data = []
@@ -156,7 +160,7 @@ class Character(pygame.sprite.Sprite):
     animation_dict = {}
     for state in STATES:
       animation_dict[state] = [] 
-      path = f'assets/{self.character_path}/{state}' 
+      path = resource_path(f'assets/{self.character_path}/{state}')
       if not os.path.exists(path):
         continue
       file_names = sorted([f for f in os.listdir(path) if f.endswith('.png')], key=frame_number)  
@@ -361,6 +365,7 @@ class Player(Character):
     self.hp = 10
     self.has_won = False 
     self.control_lock = False 
+    self.x_was_down = False
     
   
   def win(self):
@@ -376,25 +381,27 @@ class Player(Character):
   
   def input(self):
     keys = pygame.key.get_pressed()
-    attack_keys = pygame.key.get_just_pressed() 
-    self.x_vel = 0 
-    
+    x_down = keys[pygame.K_x]
+    x_just_pressed = x_down and not self.x_was_down
+    self.x_was_down = x_down
+    self.x_vel = 0
+
     if not self.control_lock:
       if self.can_act():
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-          self.direction = -1 
-          self.x_vel = -self.speed 
-          
-        if keys[pygame.K_RIGHT] or keys[pygame.K_d]: 
-          self.direction = 1 
-          self.x_vel = self.speed  
-      
-        if attack_keys[pygame.K_x]:  
-          self.is_attacking = True 
-      
-        if keys[pygame.K_SPACE]: 
-          self.jump() 
-    
+          self.direction = -1
+          self.x_vel = -self.speed
+
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+          self.direction = 1
+          self.x_vel = self.speed
+
+        if x_just_pressed:
+          self.is_attacking = True
+
+        if keys[pygame.K_SPACE]:
+          self.jump()
+
     self.set_state(self.pick_state()) 
   
   def jump(self):
@@ -457,9 +464,7 @@ class Skeleton(Character):
 
 font = pygame.font.SysFont(None, 80) 
 
-story_font = pygame.font.Font('font.otf', 26) 
-
-story_font = pygame.font.Font('font.otf', 26)
+story_font = pygame.font.Font(resource_path('font.otf'), 26)
 
 def story(speed=10.0):
   story_lines = [
@@ -501,7 +506,7 @@ def story(speed=10.0):
       screen.blit(surf, surf.get_rect(center=(WIDTH // 2, 150 + i * 50)))
     pygame.display.flip() 
 
-heart_img = pygame.transform.scale(pygame.image.load('assets/heart.png').convert_alpha(), (30, 30))
+heart_img = pygame.transform.scale(pygame.image.load(resource_path('assets/heart.png')).convert_alpha(), (30, 30))
 
 def draw_hud():
   for i in range(max(player.hp, 0)):
