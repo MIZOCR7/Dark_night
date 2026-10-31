@@ -6,6 +6,8 @@ I am incredibly proud to have built this entire game from scratch! Instead of re
 
 ---
 
+This project is working on Windows .exe so if U have any other operating system like mac or linux it will not work so U can check the readme and git clone the repo and install the dependencies as the readme is saying so U can run the game safely :) 
+---
 ## Controls
 
 | Key | Action |
