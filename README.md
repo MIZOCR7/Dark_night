@@ -10,6 +10,7 @@ Linux: https://github.com/MIZOCR7/Dark_night/releases/download/v1.0.0/DarkNight-
 Windows: https://github.com/MIZOCR7/Dark_night/releases/download/v1.0.0/DarkNight-windows.zip
 
 Mac: https://github.com/MIZOCR7/Dark_night/releases/download/v1.0.0/DarkNight-mac-arm64.zip
+
 ----------------------------------------
 ## Controls
 
