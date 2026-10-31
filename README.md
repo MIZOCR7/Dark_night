@@ -5,8 +5,9 @@ Welcome to **The Dark Night**, a Halloween theme game where a knight walks in th
 I am incredibly proud to have built this entire game from scratch! Instead of relying on heavy game engines like Unity or Godot, I used **pure Python and Pygame**, even simple physics theories I have written on my own.
 
 ---
-
-This project is working on Windows .exe so if U have any other operating system like mac or linux it will not work so U can check the readme and git clone the repo and install the dependencies as the readme is saying so U can run the game safely :) 
+Linux: https://github.com/MIZOCR7/Dark_night/releases/download/v1.0.0/DarkNight-linux.tar.gz
+Windows: https://github.com/MIZOCR7/Dark_night/releases/download/v1.0.0/DarkNight-windows.zip
+Mac: https://github.com/MIZOCR7/Dark_night/releases/download/v1.0.0/DarkNight-mac-arm64.zip
 ---
 ## Controls
 
