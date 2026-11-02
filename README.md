@@ -42,3 +42,4 @@ If you prefer to run the raw code, follow these steps in your terminal or PowerS
 1. Clone the repository:
    ```bash
    git clone [https://github.com/MIZOCR7/Dark_night](https://github.com/MIZOCR7/Dark_night)
+then pip3 if U have mac or pip if U have windows: pip install pygame, then run the game from the code directly
